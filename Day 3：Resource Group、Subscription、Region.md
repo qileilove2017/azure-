@@ -5,11 +5,12 @@ Day 3：Resource Group、Subscription、Region
 实战任务	创建多个资源组（跨不同区域），探索订阅信息，并验证资源部署的地理差异。
 🧠 一、核心知识讲解
 1. Azure 资源组织结构（从上到下）
-Management Group
-   └── Subscription
-         └── Resource Group
-                └── Resource（VM、Storage、DB、Network…）
-
+```
+      Management Group
+         └── Subscription
+               └── Resource Group
+                      └── Resource（VM、Storage、DB、Network…）
+```
 层级	作用	管理内容
 Management Group	管理多个订阅	统一策略与访问控制
 Subscription（订阅）	计费与资源隔离边界	成本、配额、访问权限
