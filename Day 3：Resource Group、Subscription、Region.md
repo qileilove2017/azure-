@@ -12,10 +12,14 @@ Day 3：Resource Group、Subscription、Region
                       └── Resource（VM、Storage、DB、Network…）
 ```
 层级	作用	管理内容
-Management Group	管理多个订阅	统一策略与访问控制
-Subscription（订阅）	计费与资源隔离边界	成本、配额、访问权限
-Resource Group（资源组）	逻辑容器	将一组资源组织在一起
-Resource（资源）	实际服务实例	VM、Storage、Database 等
+
+      Management Group	管理多个订阅	统一策略与访问控制
+      
+      Subscription（订阅）	计费与资源隔离边界	成本、配额、访问权限
+      
+      Resource Group（资源组）	逻辑容器	将一组资源组织在一起
+      
+      Resource（资源）	实际服务实例	VM、Storage、Database 等
 
 💡 要点理解：
 
