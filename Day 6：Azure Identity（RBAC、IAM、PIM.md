@@ -8,11 +8,12 @@ Day 6：Azure Identity（RBAC、IAM、PIM）
 
 Azure 的访问控制体系基于 Azure Active Directory（AAD / Entra ID），由三层构成：
 
-用户（User）/ 服务主体（Service Principal）
-     ↓
-角色（Role）
-     ↓
-作用域（Scope：Management Group / Subscription / Resource Group / Resource）
+     用户（User）/ 服务主体（Service Principal）
+          ↓
+     角色（Role）
+          ↓
+     作用域（Scope：Management Group / Subscription / Resource Group / Resource）
+
 
 层级	示例	说明
 用户 / 组 / 服务主体	zhi.hu@microsoft.com
