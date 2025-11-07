@@ -1,0 +1,211 @@
+Day 10：Azure DNS 与 Private Endpoint（私有访问与安全通信）
+模块	内容
+主题	Azure DNS、Private Endpoint
+学习目标	理解 Azure 中的私有访问机制与 DNS 解析原理；掌握通过 Private Endpoint 配置存储服务的安全通信。
+实战任务	创建 Private Endpoint，将 Storage 账户接入专用虚拟网络；配置 Azure Private DNS 实现私有解析与安全访问。
+🧠 一、核心知识讲解
+1. 为什么要使用 Private Endpoint？
+
+默认情况下，Azure 服务（Storage、SQL、WebApp 等）通过公网访问：
+
+https://mystorage.blob.core.windows.net/
+
+
+这种访问方式虽然受身份认证保护，但仍经过公网 IP，有潜在的安全风险。
+
+Private Endpoint 允许你在 VNet 内创建一个私有 IP 地址，
+与 Azure 服务私下通信（流量不再经过公网），从而实现：
+
+更安全的数据访问；
+
+零信任架构；
+
+更易合规（GDPR、金融行业等）；
+
+减少暴露面（Public Network Access 可禁用）。
+
+2. Azure Private Link 与 Private Endpoint 的关系
+概念	说明	示例
+Private Link	Azure 服务的私有化访问框架	Azure Storage、SQL、App Service 等
+Private Endpoint	私有网络中实际的私有接入点 (Private IP)	10.0.1.4
+Private DNS Zone	将服务域名解析到私有 IP	mystorage.privatelink.blob.core.windows.net → 10.0.1.4
+
+💡三者组合：
+
+    Storage Account
+        │
+    Private Link
+        │
+    Private Endpoint (VNet 内部 IP)
+        │
+    Private DNS Zone (内部解析)
+
+3. Azure DNS 的类型与用途
+DNS 类型	说明	适用场景
+Public DNS Zone	公开解析服务	对外网站
+Private DNS Zone	仅在特定 VNet 内解析	内部系统、私有链接
+Custom DNS Server	自建 DNS 服务器	企业混合云、自定义解析逻辑
+
+💡 Private DNS Zone 常配合 Private Endpoint 一起使用，自动解析到私有 IP。
+
+🧰 二、实战任务
+任务 1：准备环境
+
+创建资源组与虚拟网络：
+
+az group create --name dns-lab-rg --location eastus
+
+az network vnet create \
+  --resource-group dns-lab-rg \
+  --name dns-vnet \
+  --address-prefix 10.0.0.0/16 \
+  --subnet-name default \
+  --subnet-prefix 10.0.1.0/24
+
+任务 2：创建存储账户
+az storage account create \
+  --name mystoragepe$RANDOM \
+  --resource-group dns-lab-rg \
+  --location eastus \
+  --sku Standard_LRS \
+  --kind StorageV2 \
+  --public-network-access Enabled
+
+
+验证访问方式：
+
+az storage account show --name mystoragepe123 --query "primaryEndpoints.blob"
+
+
+👉 返回类似：
+
+https://mystoragepe123.blob.core.windows.net/
+
+任务 3：创建 Private Endpoint
+az network private-endpoint create \
+  --name pe-storage \
+  --resource-group dns-lab-rg \
+  --vnet-name dns-vnet \
+  --subnet default \
+  --private-connection-resource-id $(az storage account show --name mystoragepe123 --query id -o tsv) \
+  --group-id blob \
+  --connection-name pe-storage-conn
+
+
+此时 Azure 会在 dns-vnet 的子网内分配一个私有 IP（例如 10.0.1.5）。
+
+任务 4：创建 Private DNS Zone 并链接虚拟网络
+
+创建私有 DNS 区域：
+
+az network private-dns zone create \
+  --resource-group dns-lab-rg \
+  --name privatelink.blob.core.windows.net
+
+
+将 VNet 与私有 DNS Zone 关联：
+
+az network private-dns link vnet create \
+  --resource-group dns-lab-rg \
+  --zone-name privatelink.blob.core.windows.net \
+  --name dnslink-dns-vnet \
+  --virtual-network dns-vnet \
+  --registration-enabled false
+
+
+将 Private Endpoint 注册到该 Zone：
+
+az network private-endpoint dns-zone-group create \
+  --resource-group dns-lab-rg \
+  --endpoint-name pe-storage \
+  --name pe-storage-zone \
+  --private-dns-zone privatelink.blob.core.windows.net
+
+任务 5：验证私有访问生效
+
+查看私有 IP：
+
+az network private-endpoint show \
+  --name pe-storage \
+  --resource-group dns-lab-rg \
+  --query "networkInterfaces[0].ipConfigurations[0].privateIPAddress" \
+  -o tsv
+
+
+解析域名：
+
+nslookup mystoragepe123.blob.core.windows.net
+
+
+✅ 如果返回 10.0.x.x 私有地址，说明私有解析已生效。
+
+任务 6：禁用公网访问
+az storage account update \
+  --name mystoragepe123 \
+  --public-network-access Disabled
+
+
+现在该存储只能从你的虚拟网络（通过 Private Endpoint）访问。
+从其他公网环境访问会返回 403 Forbidden。
+
+🧩 三、验证成果
+
+✅ 你应能完成：
+
+成功创建 Storage Account；
+
+创建 Private Endpoint 并获得私有 IP；
+
+建立 Private DNS Zone，实现域名私有解析；
+
+禁用 Storage 公网访问，仅限内部私有访问；
+
+在虚拟机中通过私有 IP 安全访问 Blob 文件。
+
+🧠 四、延伸与思考
+
+私有访问常见应用
+
+内部系统访问 Storage、SQL、Key Vault；
+
+应用层（App Service）与后端数据库间通信；
+
+实现零信任网络访问。
+
+Hub-Spoke 模式下 DNS 设计
+
+将 Private DNS 部署在 Hub；
+
+Spoke 网络通过 Peering 共享解析；
+
+确保启用 DNS 转发。
+
+Private Endpoint 的安全强化
+
+使用 NSG 控制子网流量；
+
+启用 Defender for Storage；
+
+启用专用的防火墙策略；
+
+建立 Tag 标准（network=private）。
+
+性能与成本
+
+Private Endpoint 本身免费；
+
+流量计费为内部 VNet 传输；
+
+推荐结合 Private Link Service 扩展到自建 PaaS。
+
+📘 今日总结
+
+你掌握了 Azure DNS 与 Private Endpoint 的工作原理；
+
+理解了如何实现 Azure 服务的私有化访问；
+
+学会了创建 Private DNS Zone 并实现私有解析；
+
+成功验证了安全访问 Storage 的配置；
+
+掌握了企业级安全网络的核心技术：私有访问 + 内部解析 + 零信任防护。
