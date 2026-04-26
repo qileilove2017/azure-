@@ -1,0 +1,84 @@
+parameters:
+- name: projectPath
+  type: string
+
+- name: environment
+  type: string
+
+- name: autoFormat
+  type: boolean
+  default: true
+
+- name: commitFormatChanges
+  type: boolean
+  default: false
+
+- name: windowsAgentPool
+  type: string
+
+stages:
+- stage: Terraform_Format
+  displayName: Terraform Format - ${{ parameters.environment }}
+  jobs:
+  - job: Format
+    displayName: Terraform Format
+    pool:
+      name: ${{ parameters.windowsAgentPool }}
+
+    steps:
+    - checkout: self
+      persistCredentials: true
+      clean: true
+
+    - powershell: |
+        $ErrorActionPreference = 'Stop'
+
+        $tfRoot = '${{ parameters.projectPath }}'
+
+        if (-not (Test-Path $tfRoot)) {
+          throw "Terraform root directory not found: $tfRoot"
+        }
+
+        terraform version
+
+        Write-Host "Running terraform fmt..."
+        terraform -chdir="$tfRoot" fmt -recursive
+
+        $changes = git status --porcelain
+
+        if ([string]::IsNullOrWhiteSpace($changes)) {
+          Write-Host "No Terraform formatting changes detected."
+          exit 0
+        }
+
+        Write-Host "Terraform formatting changes detected:"
+        git status --short
+
+        if ("${{ parameters.commitFormatChanges }}" -eq "True") {
+          Write-Host "Committing formatting changes..."
+
+          git config user.email "azure-pipeline@local"
+          git config user.name "Azure DevOps Pipeline"
+
+          git add "$tfRoot"
+          git commit -m "chore(terraform): auto format $tfRoot"
+
+          # Push back to the same source branch
+          $sourceBranch = "$(Build.SourceBranch)"
+          $branchName = $sourceBranch.Replace("refs/heads/", "")
+
+          if ($sourceBranch -like "refs/pull/*") {
+            throw "This is a PR validation run. Auto commit to PR ref is not supported safely. Please run on a branch pipeline."
+          }
+
+          git push origin HEAD:$branchName
+
+          Write-Host "Formatting changes committed and pushed."
+          Write-Host "Stopping pipeline after formatting commit to avoid planning stale workspace."
+          exit 1
+        }
+        else {
+          throw "Terraform files are not formatted. Please run terraform fmt -recursive locally or enable commitFormatChanges."
+        }
+      displayName: Format Terraform Code
+      condition: eq('${{ parameters.autoFormat }}', 'true')
